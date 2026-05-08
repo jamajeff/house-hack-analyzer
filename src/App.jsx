@@ -9,18 +9,18 @@ import { saveToUrl, loadFromUrl } from './utils/urlState';
 
 const DEFAULT_CONFIG = {
   zillowUrl: '',
-  purchasePrice: 450000,
+  purchasePrice: '',
   downPct: 20,
   interestRate: 7.0,
   loanTerm: 30,
-  annualTaxes: 5400,
-  annualInsurance: 1800,
+  annualTaxes: '',
+  annualInsurance: '',
   monthlyHOA: 0,
-  alternativeMonthlyRent: 2000,
+  alternativeMonthlyRent: '',
   unitCount: 2,
   units: [
-    { rent: 1800, isOwnerUnit: true, label: 'Unit 1' },
-    { rent: 1800, isOwnerUnit: false, label: 'Unit 2' },
+    { rent: '', isOwnerUnit: true, label: 'Unit 1' },
+    { rent: '', isOwnerUnit: false, label: 'Unit 2' },
   ],
   vacancyRate: 5,
   maintenancePct: 1,
@@ -37,8 +37,51 @@ export default function App() {
   });
   const [activeTab, setActiveTab] = useState('summary');
   const [copied, setCopied] = useState(false);
+  const [zillowLoading, setZillowLoading] = useState(false);
+  const [zillowError, setZillowError] = useState('');
+  const [zillowAddress, setZillowAddress] = useState('');
 
-  const { results, stabilizationYear } = runAnalysis(config, config.analysisPeriod);
+  async function handleZillowImport(url) {
+    if (!url || !url.includes('zillow.com')) return;
+    setZillowLoading(true);
+    setZillowError('');
+    setZillowAddress('');
+    try {
+      const res = await fetch(`/.netlify/functions/zillow-import?url=${encodeURIComponent(url)}`);
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        setZillowError(data.error || 'Import failed.');
+        return;
+      }
+      // Merge Zillow data into config
+      const unitCount = data.unitCount || config.unitCount;
+      const rentPerUnit = data.rentZestimate ? Math.round(data.rentZestimate / unitCount) : '';
+      const newUnits = Array.from({ length: unitCount }, (_, i) => ({
+        rent: rentPerUnit,
+        isOwnerUnit: i === 0,
+        label: `Unit ${i + 1}`,
+      }));
+      setConfig(prev => ({
+        ...prev,
+        zillowUrl: url,
+        purchasePrice: data.price || prev.purchasePrice,
+        annualTaxes: data.annualTaxes || prev.annualTaxes,
+        monthlyHOA: data.monthlyHOA ?? prev.monthlyHOA,
+        unitCount,
+        units: newUnits,
+      }));
+      if (data.address) setZillowAddress(data.address);
+    } catch {
+      setZillowError('Could not reach the import service. Try entering the details manually below.');
+    } finally {
+      setZillowLoading(false);
+    }
+  }
+
+  const isReady = config.purchasePrice && Number(config.purchasePrice) > 0;
+  const { results, stabilizationYear } = isReady
+    ? runAnalysis(config, config.analysisPeriod)
+    : { results: [], stabilizationYear: null };
 
   useEffect(() => {
     const timer = setTimeout(() => saveToUrl(config), 300);
@@ -94,11 +137,25 @@ export default function App() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
         <div className="grid grid-cols-1 lg:grid-cols-[380px_1fr] gap-6">
           <aside className="flex flex-col gap-4">
-            <PropertyForm config={config} onChange={setConfig} />
+            <PropertyForm
+              config={config}
+              onChange={setConfig}
+              onZillowImport={handleZillowImport}
+              zillowLoading={zillowLoading}
+              zillowError={zillowError}
+              zillowAddress={zillowAddress}
+            />
           </aside>
 
           <div className="flex flex-col gap-4">
-            {stabilizationYear ? (
+            {!isReady && (
+              <div className="bg-white border-2 border-dashed border-slate-300 rounded-xl px-6 py-12 text-center text-slate-500">
+                <div className="text-4xl mb-3">🏘️</div>
+                <div className="font-semibold text-slate-700 mb-1">Paste a Zillow URL above to get started</div>
+                <div className="text-sm">Or manually fill in the Purchase Price on the left to see your analysis.</div>
+              </div>
+            )}
+            {isReady && stabilizationYear ? (
               <div className="bg-green-600 text-white rounded-xl px-5 py-4">
                 <div className="font-bold text-lg">
                   ✅ Stabilization Point: Year {stabilizationYear}
@@ -107,7 +164,7 @@ export default function App() {
                   Move out of your unit in Year {stabilizationYear} — the property generates positive cash flow on its own. After that, buy your next house hack.
                 </div>
               </div>
-            ) : (
+            ) : isReady ? (
               <div className="bg-amber-500 text-white rounded-xl px-5 py-4">
                 <div className="font-bold text-lg">
                   ⚠️ Not Cash Flowing Within {config.analysisPeriod} Years
@@ -116,11 +173,11 @@ export default function App() {
                   Try increasing rents, reducing purchase price, larger down payment, or extending the analysis period.
                 </div>
               </div>
-            )}
+            ) : null}
 
-            <SummaryCards results={results} stabilizationYear={stabilizationYear} config={config} />
+            {isReady && <SummaryCards results={results} stabilizationYear={stabilizationYear} config={config} />}
 
-            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            {isReady && <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
               <div className="flex border-b border-slate-200 overflow-x-auto">
                 {tabs.map(tab => (
                   <button
@@ -154,7 +211,7 @@ export default function App() {
                   <ExpenseBreakdown result={results[0]} />
                 )}
               </div>
-            </div>
+            </div>}
 
             {config.zillowUrl && (
               <div className="text-sm text-slate-500 flex items-center gap-2">
