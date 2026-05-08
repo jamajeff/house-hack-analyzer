@@ -17,12 +17,12 @@ export function calcRemainingBalance(price, downPct, annualRate, termYears, year
 
 export function analyzeYear(year, config) {
   const {
-    purchasePrice,
+    purchasePrice: _purchasePrice,
     downPct,
     interestRate,
     loanTerm,
-    annualTaxes,
-    annualInsurance,
+    annualTaxes: _annualTaxes,
+    annualInsurance: _annualInsurance,
     monthlyHOA,
     units,          // array of { rent, isOwnerUnit }
     vacancyRate,
@@ -31,8 +31,13 @@ export function analyzeYear(year, config) {
     rentGrowthRate,
     appreciationRate,
     ownerStillInUnit,
-    alternativeMonthlyRent,
+    alternativeMonthlyRent: _alternativeMonthlyRent,
   } = config;
+
+  const purchasePrice = Number(_purchasePrice) || 0;
+  const annualTaxes = Number(_annualTaxes) || 0;
+  const annualInsurance = Number(_annualInsurance) || 0;
+  const alternativeMonthlyRent = Number(_alternativeMonthlyRent) || 0;
 
   const monthlyMortgage = calcMonthlyMortgage(purchasePrice, downPct, interestRate, loanTerm);
   const propertyValue = purchasePrice * Math.pow(1 + appreciationRate / 100, year);
@@ -43,7 +48,7 @@ export function analyzeYear(year, config) {
   // Rents adjusted for growth (compounded from year 1 onward)
   const adjustedUnits = units.map(u => ({
     ...u,
-    adjustedRent: u.rent * Math.pow(1 + rentGrowthRate / 100, year),
+    adjustedRent: (Number(u.rent) || 0) * Math.pow(1 + rentGrowthRate / 100, year),
   }));
 
   // Rental income: skip owner's unit if still living there

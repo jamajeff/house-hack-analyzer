@@ -40,6 +40,8 @@ export default function App() {
   const [zillowLoading, setZillowLoading] = useState(false);
   const [zillowError, setZillowError] = useState('');
   const [zillowAddress, setZillowAddress] = useState('');
+  const [screenshotLoading, setScreenshotLoading] = useState(false);
+  const [screenshotError, setScreenshotError] = useState('');
 
   async function handleZillowImport(url) {
     if (!url || !url.includes('zillow.com')) return;
@@ -75,6 +77,43 @@ export default function App() {
       setZillowError('Could not reach the import service. Try entering the details manually below.');
     } finally {
       setZillowLoading(false);
+    }
+  }
+
+  async function handleScreenshotImport(imageData, mediaType) {
+    setScreenshotLoading(true);
+    setScreenshotError('');
+    try {
+      const res = await fetch('/.netlify/functions/screenshot-import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageData, mediaType }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        setScreenshotError(data.error || 'Could not read the screenshot.');
+        return;
+      }
+      const unitCount = data.unitCount || config.unitCount;
+      const rentPerUnit = data.rentZestimate ? Math.round(data.rentZestimate / unitCount) : '';
+      const newUnits = Array.from({ length: unitCount }, (_, i) => ({
+        rent: rentPerUnit,
+        isOwnerUnit: i === 0,
+        label: `Unit ${i + 1}`,
+      }));
+      setConfig(prev => ({
+        ...prev,
+        purchasePrice: data.price || prev.purchasePrice,
+        annualTaxes: data.annualTaxes || prev.annualTaxes,
+        monthlyHOA: data.monthlyHOA ?? prev.monthlyHOA,
+        unitCount,
+        units: newUnits,
+      }));
+      if (data.address) setZillowAddress(data.address);
+    } catch {
+      setScreenshotError('Could not reach the import service.');
+    } finally {
+      setScreenshotLoading(false);
     }
   }
 
@@ -144,6 +183,9 @@ export default function App() {
               zillowLoading={zillowLoading}
               zillowError={zillowError}
               zillowAddress={zillowAddress}
+              onScreenshotImport={handleScreenshotImport}
+              screenshotLoading={screenshotLoading}
+              screenshotError={screenshotError}
             />
           </aside>
 

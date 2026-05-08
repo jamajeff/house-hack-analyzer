@@ -1,4 +1,4 @@
-export default function InputField({ label, value, onChange, type = 'number', prefix, suffix, min, max, step = 'any', hint }) {
+export default function InputField({ label, value, onChange, type = 'number', prefix, suffix, min, max, step = 'any', hint, placeholder }) {
   return (
     <div className="flex flex-col gap-1">
       <label className="text-sm font-medium text-slate-700">{label}</label>
@@ -13,7 +13,8 @@ export default function InputField({ label, value, onChange, type = 'number', pr
           min={min}
           max={max}
           step={step}
-          className="flex-1 px-3 py-2 text-sm outline-none bg-transparent min-w-0"
+          placeholder={placeholder}
+          className="flex-1 px-3 py-2 text-sm outline-none bg-transparent min-w-0 placeholder:text-slate-300"
         />
         {suffix && (
           <span className="px-3 py-2 bg-slate-50 border-l border-slate-300 text-slate-500 text-sm select-none">{suffix}</span>

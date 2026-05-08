@@ -1,3 +1,4 @@
+import { useState, useRef } from 'react';
 import InputField from './InputField';
 import Section, { SectionFull } from './Section';
 
@@ -7,8 +8,27 @@ const UNIT_TYPES = [
   { value: 4, label: 'Quadplex (4 units)' },
 ];
 
-export default function PropertyForm({ config, onChange, onZillowImport, zillowLoading, zillowError, zillowAddress }) {
+export default function PropertyForm({ config, onChange, onZillowImport, zillowLoading, zillowError, zillowAddress, onScreenshotImport, screenshotLoading, screenshotError }) {
+  const [preview, setPreview] = useState(null);
+  const fileInputRef = useRef(null);
   const { units } = config;
+
+  function handleImageFile(file) {
+    if (!file || !file.type.startsWith('image/')) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const dataUrl = e.target.result;
+      setPreview(dataUrl);
+      const base64 = dataUrl.split(',')[1];
+      onScreenshotImport(base64, file.type);
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function handlePaste(e) {
+    const item = Array.from(e.clipboardData.items).find(i => i.type.startsWith('image/'));
+    if (item) handleImageFile(item.getAsFile());
+  }
 
   function setField(key, value) {
     onChange({ ...config, [key]: value });
@@ -35,42 +55,52 @@ export default function PropertyForm({ config, onChange, onZillowImport, zillowL
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Zillow Import */}
+      {/* Screenshot Import */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="px-5 py-4 border-b border-slate-100 flex items-center gap-2">
-          <span className="text-lg">🔗</span>
-          <h3 className="font-semibold text-slate-800 text-sm uppercase tracking-wide">Import from Zillow</h3>
+          <span className="text-lg">📸</span>
+          <h3 className="font-semibold text-slate-800 text-sm uppercase tracking-wide">Import from Screenshot</h3>
         </div>
         <div className="p-5 flex flex-col gap-3">
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={config.zillowUrl}
-              onChange={e => setField('zillowUrl', e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && onZillowImport(config.zillowUrl)}
-              placeholder="https://www.zillow.com/homedetails/..."
-              className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-w-0"
-            />
-            <button
-              onClick={() => onZillowImport(config.zillowUrl)}
-              disabled={zillowLoading || !config.zillowUrl}
-              className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap transition-colors"
-            >
-              {zillowLoading ? '⏳ Loading...' : '⬇️ Import'}
-            </button>
+          <div
+            onPaste={handlePaste}
+            onClick={() => fileInputRef.current?.click()}
+            className="border-2 border-dashed border-slate-300 rounded-lg px-4 py-6 text-center cursor-pointer hover:border-blue-400 hover:bg-blue-50/30 transition-colors"
+          >
+            {preview ? (
+              <img src={preview} alt="Preview" className="max-h-32 mx-auto rounded object-contain" />
+            ) : (
+              <div className="text-slate-400 text-sm">
+                <div className="text-2xl mb-1">📋</div>
+                <div className="font-medium text-slate-600">Paste or click to upload a screenshot</div>
+                <div className="text-xs mt-1">Take a screenshot of the Zillow listing, then Ctrl+V / Cmd+V here</div>
+              </div>
+            )}
           </div>
-          {zillowAddress && (
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={e => handleImageFile(e.target.files[0])}
+          />
+          {screenshotLoading && (
+            <div className="text-xs text-blue-700 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
+              ⏳ Analyzing screenshot with AI...
+            </div>
+          )}
+          {zillowAddress && !screenshotLoading && (
             <div className="text-xs text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
               ✅ Imported: {zillowAddress}
             </div>
           )}
-          {zillowError && (
+          {screenshotError && (
             <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-              ⚠️ {zillowError}
+              ⚠️ {screenshotError}
             </div>
           )}
           <p className="text-xs text-slate-400">
-            Imports price, taxes, HOA, and rent estimate. Fill in anything it misses below.
+            AI reads price, taxes, HOA, and rent from your screenshot. Fill in anything it misses below.
           </p>
         </div>
       </div>
